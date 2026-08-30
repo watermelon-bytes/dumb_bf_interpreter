@@ -1,10 +1,7 @@
 use std::env;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
-use std::process::exit;
-use std::{
-    fs::File,
-    io::{self, Error, Read, Write},
-};
+use std::fs::File;
+use std::io::{self, Read, Write};
+use std::ops::{AddAssign, SubAssign};
 
 fn main() {
     let passed_args: Vec<String> = env::args().collect();
@@ -19,7 +16,7 @@ fn main() {
     match File::open(input_filename) {
         Err(_) => {
             println!("Errors occured while opening file");
-            return;
+            std::process::exit(2);
         }
         Ok(f) => {
             println!("Successfully read file {input_filename}");
@@ -31,7 +28,7 @@ fn main() {
     BrainfuckInterpreter::new()
         .execute(buf.as_str())
         .unwrap_or_else(|_| {
-            exit(1);
+            std::process::exit(1);
         });
 }
 
@@ -55,7 +52,7 @@ enum BasicDirection {
 enum BrainfuckError {
     PointerUnderflow,
     PointerPastArraySize,
-    UnclosedBracket,
+    _UnclosedBracket,
 }
 
 impl BrainfuckInterpreter {
