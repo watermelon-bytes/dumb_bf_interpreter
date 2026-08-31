@@ -37,6 +37,8 @@ struct BrainfuckInterpreter {
     pointer: usize,
     // TODO: Consider using a reference or a slice instead of usize, like:
     // alternative_pointer: &u8,
+    //
+    loop_labels: std::vec::Vec<usize>, // TODO: Consider replacing with Queue from this crate: https://docs.rs/queues/latest/queues/
 }
 
 enum PrimitiveOperation {
@@ -60,6 +62,8 @@ impl BrainfuckInterpreter {
         BrainfuckInterpreter {
             data: [0; 10_000], // TODO: Make it grow dynamically.
             pointer: 0,
+            // Generally, a queue is needed here
+            loop_labels: Vec::new(), // TODO: Linked list could be better here
         }
     }
 
@@ -79,18 +83,22 @@ impl BrainfuckInterpreter {
     fn move_pointer(&mut self, direction: BasicDirection) -> Result<(), BrainfuckError> {
         match direction {
             BasicDirection::Right => {
+                self.pointer.add_assign(1);
                 if self.pointer > self.data.len() {
-                    return Err(BrainfuckError::PointerPastArraySize);
+                    Err(BrainfuckError::PointerPastArraySize)
+                } else {
+                    Ok(())
                 }
-                self.pointer += 1;
             }
             BasicDirection::Left => {
                 if self.pointer == 0 {
-                    return Err(BrainfuckError::PointerUnderflow);
+                    Err(BrainfuckError::PointerUnderflow)
+                } else {
+                    self.pointer.sub_assign(1);
+                    Ok(())
                 }
             }
         }
-        Ok(())
     }
 
     // TODO: Return some kind of Result
@@ -107,13 +115,15 @@ impl BrainfuckInterpreter {
         *current_cell = buf[0];
     }
 
+    /// Writes the character at `data[pointer]` to `io::stdout()`
     fn output_current_character(&self) -> io::Result<()> {
         let current_data_cell = self.data.get(self.pointer).unwrap();
         io::stdout().write_all(&[*current_data_cell])
     }
 
     fn execute(&mut self, source: &str) -> Result<(), BrainfuckError> {
-        for c in source.chars() {
+        let mut iterator = source.chars().enumerate();
+        for (program_counter, c) in iterator {
             match c {
                 '>' => {
                     self.move_pointer(BasicDirection::Right)?;
@@ -135,12 +145,17 @@ impl BrainfuckInterpreter {
                 ',' => {
                     self.input_to_cell();
                 }
-                '[' => todo!("loops via [...]"),
-                ']' => todo!("loops via [...]"),
+                '[' => self.bracket_loop(program_counter),
+                ']' => {}
                 _ => {} // We ignore everything else
             };
         }
         println!("\n[end of program output]");
         Ok(())
-    } // fn execute
+    }
+
+    /// Adds a new label pointing to where to jump to when next ']' is encountered.
+    fn bracket_loop(&mut self, position: usize) {
+        self.loop_labels.push(position);
+    }
 }
