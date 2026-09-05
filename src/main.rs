@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::ops::{AddAssign, SubAssign};
+use std::ops::{AddAssign, Sub, SubAssign};
 
 fn main() {
     let passed_args: Vec<String> = env::args().collect();
@@ -37,7 +37,6 @@ struct BrainfuckInterpreter {
     pointer: usize,
     // TODO: Consider using a reference or a slice instead of usize, like:
     // alternative_pointer: &u8,
-    //
     loop_labels: std::collections::VecDeque<usize>,
 }
 
@@ -72,9 +71,9 @@ impl BrainfuckInterpreter {
     /// Increments or decrements value of the cell at the data pointer.
     fn manipulate_data(&mut self, op: PrimitiveOperation) -> Result<(), BrainfuckError> {
         if let Some(curr_cell_ref) = self.data.get_mut(self.pointer) {
-            match op {
-                PrimitiveOperation::Increment => curr_cell_ref.add_assign(1),
-                PrimitiveOperation::Decrement => curr_cell_ref.sub_assign(1),
+            *curr_cell_ref = match op {
+                PrimitiveOperation::Increment => curr_cell_ref.wrapping_add(1),
+                PrimitiveOperation::Decrement => curr_cell_ref.wrapping_sub(1),
             };
             Ok(())
         } else {
@@ -134,27 +133,21 @@ impl BrainfuckInterpreter {
         let mut program_counter: usize = 0;
         while let Some(c) = source.chars().nth(program_counter) {
             match c {
-                '>' => {
-                    self.move_pointer(BasicDirection::Right)?;
-                    // TODO: Consider dynamically extending buffer if pointer goes out of bounds
-                }
-                '<' => {
-                    self.move_pointer(BasicDirection::Left)?;
-                }
-                '+' => {
-                    self.manipulate_data(PrimitiveOperation::Increment)?;
-                }
-                '-' => {
-                    self.manipulate_data(PrimitiveOperation::Decrement)?;
-                }
-                '.' => {
-                    self.output_current_character()
-                        .expect("error writing to stdout");
-                }
-                ',' => {
-                    self.input_to_cell();
-                }
+                // TODO: Consider dynamically extending buffer if pointer goes out of bounds
+                '>' => self.move_pointer(BasicDirection::Right)?,
+                '<' => self.move_pointer(BasicDirection::Left)?,
+
+                '+' => self.manipulate_data(PrimitiveOperation::Increment)?,
+                '-' => self.manipulate_data(PrimitiveOperation::Decrement)?,
+
+                '.' => self
+                    .output_current_character()
+                    .expect("error writing to stdout"),
+
+                ',' => self.input_to_cell(),
+
                 '[' => self.loop_labels.push_back(program_counter),
+
                 ']' => {
                     if self.read_data_cell_at_pointer()? != 0 {
                         // If value of current cell is not 0, then jump to the next command after the matching '['.
@@ -162,8 +155,8 @@ impl BrainfuckInterpreter {
                             Some(new_pc) => *new_pc,
                             None => return Err(BrainfuckError::ClosingBracketMissingOpening),
                         };
-                    } else {
-                        self.loop_labels.pop_back();
+                    } else if self.loop_labels.pop_back().is_none() {
+                        return Err(BrainfuckError::ClosingBracketMissingOpening);
                     }
                 }
                 _ => {} // We ignore everything else
