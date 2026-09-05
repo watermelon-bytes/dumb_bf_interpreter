@@ -51,6 +51,7 @@ enum BasicDirection {
     Left,
 }
 
+/// Capable of describing any error that can occur
 enum BrainfuckError {
     PointerUnderflow,
     PointerPastArraySize,
@@ -133,7 +134,7 @@ impl BrainfuckInterpreter {
         let mut program_counter: usize = 0;
         while let Some(c) = source.chars().nth(program_counter) {
             match c {
-                '>' if true => {
+                '>' => {
                     self.move_pointer(BasicDirection::Right)?;
                     // TODO: Consider dynamically extending buffer if pointer goes out of bounds
                 }
@@ -153,14 +154,16 @@ impl BrainfuckInterpreter {
                 ',' => {
                     self.input_to_cell();
                 }
-                '[' => self.bracket_loop(program_counter),
+                '[' => self.loop_labels.push_back(program_counter),
                 ']' => {
                     if self.read_data_cell_at_pointer()? != 0 {
-                        program_counter = match self.get_innermost_loop() {
+                        // If value of current cell is not 0, then jump to the next command after the matching '['.
+                        program_counter = match self.loop_labels.back() {
                             Some(new_pc) => *new_pc,
                             None => return Err(BrainfuckError::ClosingBracketMissingOpening),
                         };
-                        continue;
+                    } else {
+                        self.loop_labels.pop_back();
                     }
                 }
                 _ => {} // We ignore everything else
@@ -168,15 +171,10 @@ impl BrainfuckInterpreter {
             program_counter.add_assign(1);
         }
         println!("\n[end of program output]");
-        Ok(())
-    }
-
-    /// Adds a new label pointing to where to jump to when next ']' is encountered.
-    fn bracket_loop(&mut self, position: usize) {
-        self.loop_labels.push_back(position);
-    }
-
-    fn get_innermost_loop(&self) -> Option<&usize> {
-        self.loop_labels.back()
+        if self.loop_labels.is_empty() {
+            Ok(())
+        } else {
+            Err(BrainfuckError::UnclosedBracket)
+        }
     }
 }
