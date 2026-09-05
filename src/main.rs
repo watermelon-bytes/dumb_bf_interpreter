@@ -26,7 +26,7 @@ fn main() {
     .read_to_string(&mut buf)
     .expect("Could not read file contents");
     BrainfuckInterpreter::new()
-        .execute(buf.as_str())
+        .run(buf.as_str())
         .unwrap_or_else(|_| {
             std::process::exit(1);
         });
@@ -38,7 +38,7 @@ struct BrainfuckInterpreter {
     // TODO: Consider using a reference or a slice instead of usize, like:
     // alternative_pointer: &u8,
     //
-    loop_labels: std::vec::Vec<usize>, // TODO: Consider replacing with Queue from this crate: https://docs.rs/queues/latest/queues/
+    loop_labels: std::collections::VecDeque<usize>,
 }
 
 enum PrimitiveOperation {
@@ -54,7 +54,8 @@ enum BasicDirection {
 enum BrainfuckError {
     PointerUnderflow,
     PointerPastArraySize,
-    _UnclosedBracket,
+    UnclosedBracket,
+    ClosingBracketMissingOpening,
 }
 
 impl BrainfuckInterpreter {
@@ -62,8 +63,8 @@ impl BrainfuckInterpreter {
         BrainfuckInterpreter {
             data: [0; 10_000], // TODO: Make it grow dynamically.
             pointer: 0,
-            // Generally, a queue is needed here
-            loop_labels: Vec::new(), // TODO: Linked list could be better here
+            // Use as a queue
+            loop_labels: std::collections::VecDeque::new(),
         }
     }
 
@@ -77,6 +78,13 @@ impl BrainfuckInterpreter {
             Ok(())
         } else {
             Err(BrainfuckError::PointerPastArraySize)
+        }
+    }
+
+    fn read_data_cell_at_pointer(&self) -> Result<u8, BrainfuckError> {
+        match self.data.get(self.pointer) {
+            Some(val) => Ok(*val),
+            None => Err(BrainfuckError::PointerPastArraySize),
         }
     }
 
@@ -121,11 +129,11 @@ impl BrainfuckInterpreter {
         io::stdout().write_all(&[*current_data_cell])
     }
 
-    fn execute(&mut self, source: &str) -> Result<(), BrainfuckError> {
-        let mut iterator = source.chars().enumerate();
-        for (program_counter, c) in iterator {
+    fn run(&mut self, source: &str) -> Result<(), BrainfuckError> {
+        let mut program_counter: usize = 0;
+        while let Some(c) = source.chars().nth(program_counter) {
             match c {
-                '>' => {
+                '>' if true => {
                     self.move_pointer(BasicDirection::Right)?;
                     // TODO: Consider dynamically extending buffer if pointer goes out of bounds
                 }
@@ -146,9 +154,18 @@ impl BrainfuckInterpreter {
                     self.input_to_cell();
                 }
                 '[' => self.bracket_loop(program_counter),
-                ']' => {}
+                ']' => {
+                    if self.read_data_cell_at_pointer()? != 0 {
+                        program_counter = match self.get_innermost_loop() {
+                            Some(new_pc) => *new_pc,
+                            None => return Err(BrainfuckError::ClosingBracketMissingOpening),
+                        };
+                        continue;
+                    }
+                }
                 _ => {} // We ignore everything else
             };
+            program_counter.add_assign(1);
         }
         println!("\n[end of program output]");
         Ok(())
@@ -156,6 +173,10 @@ impl BrainfuckInterpreter {
 
     /// Adds a new label pointing to where to jump to when next ']' is encountered.
     fn bracket_loop(&mut self, position: usize) {
-        self.loop_labels.push(position);
+        self.loop_labels.push_back(position);
+    }
+
+    fn get_innermost_loop(&self) -> Option<&usize> {
+        self.loop_labels.back()
     }
 }
