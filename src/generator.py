@@ -5,7 +5,7 @@ def generate_bf_code(s: str):
     output_string = ""
     for char in s:
         output_string += "+" * ord(char)
-        output_string += ".\n"
+        output_string += ".>\n"
     print(output_string)
 
 
