@@ -64,7 +64,7 @@ impl BrainfuckInterpreter {
         match direction {
             BasicDirection::Right => {
                 self.pointer.add_assign(1);
-                if self.pointer > self.data.len() {
+                if self.pointer >= self.data.len() {
                     return Err(BrfError::PointerPastArraySize);
                 }
             }
