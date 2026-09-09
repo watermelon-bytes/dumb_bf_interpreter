@@ -4,9 +4,11 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 
+use crate::brainfuck::BrfError;
+
 fn main() {
     let passed_args: Vec<String> = env::args().collect();
-    if passed_args.len() == 1 {
+    if passed_args.len() == 1 || passed_args.len() > 1 {
         println!("fatal: a Brainfuck source code filename demanded");
         std::process::exit(2);
     }
@@ -27,10 +29,13 @@ fn main() {
     }
     .read_to_string(&mut buf)
     .expect("Could not read file contents");
-    if let Err(brainfuck::BrfError::UnclosedBracket) =
-        brainfuck::BrainfuckInterpreter::new().run(buf.as_str())
-    {
-        println!("Unclosed bracket was detected!");
+    if let Err(e) = brainfuck::BrainfuckInterpreter::new().run(buf.as_str()) {
+        match e {
+            BrfError::NonAsciiInput => println!("Non-ASCII input file source"),
+            _ => {
+                dbg!(e);
+            }
+        };
         std::process::exit(1);
-    }
+    };
 }
