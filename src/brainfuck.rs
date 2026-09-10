@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::ops::{AddAssign, SubAssign};
 
 pub struct BrainfuckInterpreter {
@@ -26,6 +26,8 @@ pub enum BrfError {
     PointerPastArraySize,
     UnclosedBracket,
     ClosingBracketMissingOpening,
+    NonAsciiInput,
+    InputOutputOperationFailed(std::io::ErrorKind),
 }
 
 impl BrainfuckInterpreter {
@@ -79,18 +81,18 @@ impl BrainfuckInterpreter {
         Ok(())
     }
 
-    // TODO: Return some kind of Result and do not panic!
-    fn input_to_cell(&mut self) {
+    fn input_to_cell(&mut self) -> Result<(), BrfError> {
         let mut buf: [u8; 1] = [0];
         if let Err(e) = std::io::stdin().read_exact(&mut buf) {
-            dbg!(e);
-            panic!("error while reading stdin");
+            dbg!(&e);
+            return Err(BrfError::InputOutputOperationFailed(e.kind()));
         }
-        let current_cell = self
-            .data
-            .get_mut(self.pointer)
-            .expect("Pointer out of bounds");
+        let current_cell = match self.data.get_mut(self.pointer) {
+            Some(cell_ref) => cell_ref,
+            None => return Err(BrfError::PointerPastArraySize),
+        };
         *current_cell = buf[0];
+        Ok(())
     }
 
     /// Writes the character at `data[pointer]` to `io::stdout()`
@@ -100,25 +102,28 @@ impl BrainfuckInterpreter {
     }
 
     pub fn run(&mut self, source: &str) -> Result<(), BrfError> {
+        if !source.is_ascii() {
+            return Err(BrfError::NonAsciiInput);
+        }
         let mut program_counter: usize = 0;
-        while let Some(c) = source.chars().nth(program_counter) {
+        while let Some(c) = source.bytes().nth(program_counter) {
             match c {
                 // TODO: Consider dynamically extending buffer if pointer goes out of bounds
-                '>' => self.move_pointer(BasicDirection::Right)?,
-                '<' => self.move_pointer(BasicDirection::Left)?,
+                b'>' => self.move_pointer(BasicDirection::Right)?,
+                b'<' => self.move_pointer(BasicDirection::Left)?,
 
-                '+' => self.manipulate_data(PrimitiveOperation::Increment)?,
-                '-' => self.manipulate_data(PrimitiveOperation::Decrement)?,
+                b'+' => self.manipulate_data(PrimitiveOperation::Increment)?,
+                b'-' => self.manipulate_data(PrimitiveOperation::Decrement)?,
 
-                '.' => self
+                b'.' => self
                     .output_current_character()
                     .expect("error writing to stdout"),
 
-                ',' => self.input_to_cell(),
+                b',' => self.input_to_cell()?,
 
-                '[' => self.loop_labels.push_back(program_counter),
+                b'[' => self.loop_labels.push_back(program_counter),
 
-                ']' => {
+                b']' => {
                     if self.read_data_cell_at_pointer()? != 0 {
                         // If value of current cell is not 0, then jump to the next command after the matching '['.
                         program_counter = match self.loop_labels.back() {
