@@ -2,13 +2,13 @@ mod brainfuck;
 mod brainfuck_tests;
 use std::env;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Error, Read};
 
 use crate::brainfuck::BrfError;
 
 fn main() {
     let passed_args: Vec<String> = env::args().collect();
-    if passed_args.len() == 1 || passed_args.len() > 1 {
+    if passed_args.len() == 1 || passed_args.len() > 2 {
         println!("fatal: a Brainfuck source code filename demanded");
         std::process::exit(2);
     }
@@ -32,6 +32,11 @@ fn main() {
     if let Err(e) = brainfuck::BrainfuckInterpreter::new().run(buf.as_str()) {
         match e {
             BrfError::NonAsciiInput => println!("Non-ASCII input file source"),
+            BrfError::InputOutputOperationFailed(io_err) => {
+                println!("IO operation failed: ");
+                dbg!(io_err);
+                std::process::exit(4);
+            }
             _ => {
                 dbg!(e);
             }
